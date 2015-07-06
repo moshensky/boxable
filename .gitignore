@@ -12,5 +12,5 @@ manifest.mf
 *.ear
 
 .idea
-target
+target/
 *.iml
