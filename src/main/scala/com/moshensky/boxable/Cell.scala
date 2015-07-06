@@ -62,15 +62,15 @@ class Cell(row: Row, width: Float, var text: String) {
   }
 
   def getParagraph: Paragraph = {
-    return new Paragraph(text, font, fontSize.toInt, width.toInt)
+    new Paragraph(text, font, fontSize.toInt, width.toInt)
   }
 
   def getExtraWidth: Float = {
-    return this.row.getLastCellExtraWidth + getWidth
+    this.row.getLastCellExtraWidth + getWidth
   }
 
   def getHeight: Float = {
-    return row.getHeight
+    row.getHeight
   }
 }
 
@@ -82,7 +82,7 @@ object Cell {
    */
   def apply(row: Row, width: Float, text: String, isCalculated: Boolean) = {
     val cellWidth = if (isCalculated) {
-      val calclulatedWidth: Double = ((row.getWidth * width) / 100)
+      val calclulatedWidth: Double = (row.getWidth * width) / 100
       calclulatedWidth.toFloat
     }
     else {

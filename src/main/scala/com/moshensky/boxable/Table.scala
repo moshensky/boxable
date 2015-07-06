@@ -1,24 +1,31 @@
 package com.moshensky.boxable
 
+import java.awt.Color
 import java.io.File
 
 import org.apache.pdfbox.pdmodel.font.{PDType0Font, PDFont}
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageXYZDestination
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem
 import org.apache.pdfbox.pdmodel.{PDPageContentStream, PDDocument, PDPage}
-import org.log4s._
+//import org.log4s._
 import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
 //import be.quodlibet.boxable.{Cell, BoxableUtils, Row}
 /**
  * Created by moshensky on 7/5/15.
  */
-abstract class Table[T <: PDPage](var currentPage: T) {
-  private[this] val logger = getLogger
+trait TableTrait {
+  def getHeader: Row
+  def getWidth: Float
+  def getMargin: Float
+}
 
-  private var document: PDDocument = null
+abstract class Table[T <: PDPage](var currentPage: T, val document: PDDocument) extends TableTrait {
+  //private[this] val logger = getLogger
+
   private var margin: Float = 0
   private var tableContentStream: PDPageContentStream = null
-  private var bookmarks: List[PDOutlineItem] = null
+  private var bookmarks: List[PDOutlineItem] = List()
   private val VerticalCellMargin: Float = 2f
   private val HorizontalCellMargin: Float = 2f
   private val xSpacing: Int = 0
@@ -33,8 +40,7 @@ abstract class Table[T <: PDPage](var currentPage: T) {
   private var drawContent: Boolean = false
 
   def this(yStartNewPage: Float, bottomMargin: Float, width: Float, margin: Float, document: PDDocument, drawLines: Boolean, drawContent: Boolean, currentPage: T, yStart: Float) {
-    this(currentPage)
-    this.document = document
+    this(currentPage, document)
     this.drawLines = drawLines
     this.drawContent = drawContent
     this.yStartNewPage = yStartNewPage
@@ -48,8 +54,7 @@ abstract class Table[T <: PDPage](var currentPage: T) {
   }
 
   def this(yStartNewPage: Float, bottomMargin: Float, width: Float, margin: Float, document: PDDocument, drawLines: Boolean, drawContent: Boolean) {
-    this(createPage)
-    this.document = document
+    this(createPage, document)
     this.drawLines = drawLines
     this.drawContent = drawContent
     this.yStartNewPage = yStartNewPage
@@ -63,8 +68,8 @@ abstract class Table[T <: PDPage](var currentPage: T) {
   protected def loadFonts
 
   protected def loadFont(fontPath: String): PDFont = {
-    val barcodeFontFile = new File(fontPath)
-    PDType0Font.load(document, barcodeFontFile)
+    val fontFile = new File(fontPath)
+    PDType0Font.load(document, fontFile)
   }
 
   protected def getDocument: PDDocument = {
@@ -75,32 +80,28 @@ abstract class Table[T <: PDPage](var currentPage: T) {
     drawTitle(title, font, fontSize, null)
   }
 
-  def drawTitle(title: String, font: PDFont, fontSize: Int, textType: TextType) {
+  def drawTitle(title: String, font: PDFont, fontSize: Int, textType: Option[TextType]) {
     val articleTitle = createPdPageContentStream
-    articleTitle.beginText
+    articleTitle.beginText()
     articleTitle.setFont(font, fontSize)
-    articleTitle.moveTextPositionByAmount(getMargin, yStart)
+    articleTitle.newLineAtOffset(getMargin, yStart)
     articleTitle.setNonStrokingColor(Color.black)
-    articleTitle.drawString(title)
-    articleTitle.endText
+    articleTitle.showText(title)
+    articleTitle.endText()
 
-    if (textType != null) {
-      textType match {
-        case HIGHLIGHT =>
-          throw new NotImplementedException
-        case SQUIGGLY =>
-          throw new NotImplementedException
-        case STRIKEOUT =>
-          throw new NotImplementedException
-        case UNDERLINE =>
-          val y: Float = (yStart - 1.5).toFloat
-          val titleWidth: Float = font.getStringWidth(title) / 1000 * fontSize
-          articleTitle.drawLine(getMargin, y, getMargin + titleWidth, y)
-        case _ =>
-      }
+    textType.getOrElse(Unit) match {
+      case TextType.Highlight => throw new NotImplementedException
+      case TextType.Squiggly => throw new NotImplementedException
+      case TextType.Strikeout => throw new NotImplementedException
+      case TextType.Underline =>
+        val y: Float = (yStart - 1.5).toFloat
+        val titleWidth: Float = font.getStringWidth(title) / 1000 * fontSize
+        articleTitle.moveTo(getMargin, y)
+        articleTitle.lineTo(getMargin + titleWidth, y)
+        articleTitle.stroke()
     }
 
-    articleTitle.close
+    articleTitle.close()
     yStart = (yStart - (fontSize / 1.5)).toFloat
   }
 
@@ -110,27 +111,22 @@ abstract class Table[T <: PDPage](var currentPage: T) {
 
   def createRow(height: Float): Row = {
     val row: Row = new Row(this, height)
-    this.rows.add(row)
-    return row
+    this.rows = row :: this.rows
+    row
   }
 
   def createRow(cells: List[Cell], height: Float): Row = {
-    val row: Row = new Row(this, cells, height)
-    this.rows.add(row)
-    return row
+    val row: Row = new Row(this, height, cells)
+    this.rows = row :: this.rows
+    row
   }
 
-  @throws(classOf[IOException])
   def draw: Float = {
-    import scala.collection.JavaConversions._
-    for (row <- rows) {
-      drawRow(row)
-    }
+    rows.foreach(drawRow)
     endTable
-    return yStart
+    yStart
   }
 
-  @throws(classOf[IOException])
   private def drawRow(row: Row) {
     var bookmark: Boolean = false
     if (row.getBookmark != null) {
@@ -141,6 +137,7 @@ abstract class Table[T <: PDPage](var currentPage: T) {
       row.getBookmark.setDestination(bookmarkDestination)
       this.addBookmark(row.getBookmark)
     }
+
     if (isEndOfPage(row)) {
       endTable
       this.yStart = yStartNewPage
@@ -150,12 +147,14 @@ abstract class Table[T <: PDPage](var currentPage: T) {
         drawRow(header)
       }
       else {
-        LOGGER.warn("No Header Row Defined.")
+        //logger.warn("No Header Row Defined.")
       }
     }
+
     if (drawLines) {
       drawVerticalLines(row)
     }
+
     if (drawContent) {
       drawCellContent(row)
     }
@@ -169,7 +168,7 @@ abstract class Table[T <: PDPage](var currentPage: T) {
     var nextX: Float = margin + HorizontalCellMargin
     val nextY: Float = yStart - (row.getLineHeight - VerticalCellMargin)
     import scala.collection.JavaConversions._
-    for (cell <- row.getCells) {
+    row.getCells.foreach(cell => {
       if (cell.getFont == null) {
         throw new IllegalArgumentException("Font is null on Cell=" + cell.getText)
       }
@@ -177,23 +176,22 @@ abstract class Table[T <: PDPage](var currentPage: T) {
       this.tableContentStream.setNonStrokingColor(cell.getTextColor)
       this.tableContentStream.beginText
       this.tableContentStream.moveTextPositionByAmount(nextX, nextY)
+      this.tableContentStream.appendRawCommands(cell.getParagraph.getFontHeight + " TL\n")
       val lines: List[String] = cell.getParagraph.getLines
       var numLines: Int = cell.getParagraph.getLines.size
-      this.tableContentStream.appendRawCommands(cell.getParagraph.getFontHeight + " TL\n")
-      import scala.collection.JavaConversions._
-      for (line <- cell.getParagraph.getLines) {
+      cell.getParagraph.getLines.foreach(line => {
         this.tableContentStream.drawString(line.trim)
         if (numLines > 0) this.tableContentStream.appendRawCommands("T*\n")
         numLines -= 1
-      }
+      })
       this.tableContentStream.endText
       this.tableContentStream.closeSubPath
       nextX += cell.getWidth
-    }
+    })
+
     yStart = yStart - row.getHeight
   }
 
-  @throws(classOf[IOException])
   private def drawVerticalLines(row: Row) {
     var xStart: Float = margin
     val xEnd: Float = row.xEnd + xSpacing
@@ -210,7 +208,6 @@ abstract class Table[T <: PDPage](var currentPage: T) {
     drawLine("Last Cell ", xEnd, yStart, xEnd, yEnd)
   }
 
-  @throws(classOf[IOException])
   private def drawLine(`type`: String, xStart: Float, yStart: Float, xEnd: Float, yEnd: Float) {
     this.tableContentStream.setNonStrokingColor(Color.BLACK)
     this.tableContentStream.setStrokingColor(Color.BLACK)
@@ -218,58 +215,54 @@ abstract class Table[T <: PDPage](var currentPage: T) {
     this.tableContentStream.closeSubPath
   }
 
-  @throws(classOf[IOException])
   private def fillCellColor(cell: Cell, yStart: Float, xStart: Float, cellIterator: Iterator[Cell]) {
     if (cell.getFillColor != null) {
       this.tableContentStream.setNonStrokingColor(cell.getFillColor)
-      yStart = yStart - cell.getHeight
+      val yStartWithoutCellHeight = yStart - cell.getHeight
       val height: Float = cell.getHeight - 1f
       val width: Float = getWidth(cell, cellIterator)
-      this.tableContentStream.fillRect(xStart, yStart, width + xSpacing, height)
+      this.tableContentStream.fillRect(xStart, yStartWithoutCellHeight, width + xSpacing, height)
       this.tableContentStream.closeSubPath
       this.tableContentStream.setNonStrokingColor(Color.BLACK)
     }
   }
 
   private def getWidth(cell: Cell, cellIterator: Iterator[Cell]): Float = {
-    var width: Float = .0
     if (cellIterator.hasNext) {
-      width = cell.getWidth
+      cell.getWidth
+    } else {
+      cell.getExtraWidth
     }
-    else {
-      width = cell.getExtraWidth
-    }
-    return width
   }
 
   protected def createPage: T
 
-  @throws(classOf[IOException])
   private def endTable {
     if (drawLines) {
       drawLine("Row Bottom Border ", this.margin, this.yStart, this.margin + width + xSpacing, this.yStart)
     }
-    this.tableContentStream.close
+
+    this.tableContentStream.close()
   }
 
   def getCurrentPage: T = {
-    checkNotNull(this.currentPage, "No current page defined.")
-    return this.currentPage
+    if (this.currentPage == null) throw new Exception("No current page defined.")
+
+    this.currentPage
   }
 
   def isEndOfPage(row: Row): Boolean = {
     val currentY: Float = yStart - row.getHeight
     val isEndOfPage: Boolean = currentY <= (bottomMargin + 10)
-    return isEndOfPage
+    isEndOfPage
   }
 
   private def addBookmark(bookmark: PDOutlineItem) {
-    if (bookmarks == null) bookmarks = new ArrayList[_]
-    bookmarks.add(bookmark)
+    bookmarks = bookmark::bookmarks
   }
 
   def getBookmarks: List[PDOutlineItem] = {
-    return bookmarks
+    bookmarks
   }
 
   def setHeader(header: Row) {
@@ -280,11 +273,12 @@ abstract class Table[T <: PDPage](var currentPage: T) {
     if (header == null) {
       throw new IllegalArgumentException("Header Row not set on table")
     }
-    return header
+
+    header
   }
 
   private[boxable] def getMargin: Float = {
-    return margin
+    margin
   }
 
   protected def setYStart(yStart: Float) {

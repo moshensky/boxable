@@ -1,14 +1,11 @@
 package com.moshensky.boxable
 
-import java.io.IOException
-
-import be.quodlibet.boxable.{Cell, Table}
 import org.apache.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem
 
 /**
  * Created by moshensky on 7/5/15.
  */
-class Row(val table: Table, var height: Float, var cells: List[Cell] = List[Cell]()) {
+class Row(val table: TableTrait, var height: Float, var cells: List[Cell] = List[Cell]()) {
   private[boxable] var bookmark: PDOutlineItem = null
 
   def createCell(width: Float, value: String): Cell = {
@@ -24,7 +21,7 @@ class Row(val table: Table, var height: Float, var cells: List[Cell] = List[Cell
    * @return
    */
   def createCell(value: String): Cell = {
-    val headerCellWidth: Float = table.getHeader.getCells.get(cells.size).getWidth
+    val headerCellWidth: Float = table.getHeader.getCells(cells.size).getWidth
     val cell: Cell = Cell(this, headerCellWidth, value, false)
     cells = cell :: cells
     cell
@@ -71,7 +68,7 @@ class Row(val table: Table, var height: Float, var cells: List[Cell] = List[Cell
     this.bookmark = bookmark
   }
 
-  protected def getLastCellExtraWidth: Float = {
+  def getLastCellExtraWidth: Float = {
     var cellWidth = cells.reduce(_.getWidth + _.getWidth)
     this.getWidth - cellWidth
   }

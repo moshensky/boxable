@@ -14,7 +14,7 @@ abstract class AbstractPageTemplate extends PDPage {
   def addPicture(image: PDImageXObject, cursorX: Float, cursorY: Float, width: Int, height: Int) {
     val contentStream = new PDPageContentStream(getDocument, this, true, false)
     contentStream.drawImage(image, cursorX, cursorY, width, height)
-    contentStream.close
+    contentStream.close()
   }
 
   def loadPicture(fileName: String): PDImageXObject = {

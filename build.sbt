@@ -10,6 +10,7 @@ resolvers ++= Seq(
 
 libraryDependencies ++= Seq(
   "org.apache.pdfbox" % "pdfbox-app" % "2.0.0-SNAPSHOT",
+  "ch.qos.logback" % "logback-classic" % "1.1.3",
   "org.log4s" %% "log4s" % "1.1.5"
 )
 
